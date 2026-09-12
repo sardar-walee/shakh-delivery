@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { DeliveryAddress } from '../types/address.types';
 import { supabase } from '../lib/supabase';
 import { useLocationStore } from './useLocationStore';
+import { isValidUUID } from '../utils/uuid';
 
 interface AddressStoreState {
   addresses: DeliveryAddress[];
@@ -75,24 +76,21 @@ export const useAddressStore = create<AddressStoreState>((set, get) => ({
         localStorage.setItem(key, JSON.stringify(parsed));
       }
 
-      // Try fetching or syncing with Supabase user profile if authenticated
-      if (userId) {
+      // Fetch from Supabase delivery_addresses table if authenticated
+      if (userId && isValidUUID(userId)) {
         try {
-          const { data: profile } = await supabase
-            .from('profiles')
+          const { data: dbAddresses, error } = await supabase
+            .from('delivery_addresses')
             .select('*')
-            .eq('id', userId)
-            .single();
+            .eq('user_id', userId)
+            .order('is_default', { ascending: false });
 
-          if (profile && (profile as any).delivery_addresses) {
-            const dbAddresses = (profile as any).delivery_addresses as DeliveryAddress[];
-            if (Array.isArray(dbAddresses) && dbAddresses.length > 0) {
-              parsed = dbAddresses;
-              localStorage.setItem(key, JSON.stringify(parsed));
-            }
+          if (!error && dbAddresses && dbAddresses.length > 0) {
+            parsed = dbAddresses as DeliveryAddress[];
+            localStorage.setItem(key, JSON.stringify(parsed));
           }
         } catch {
-          // Supabase column fallback
+          // Supabase table fallback
         }
       }
 
@@ -167,22 +165,43 @@ export const useAddressStore = create<AddressStoreState>((set, get) => ({
       });
     }
 
-    localStorage.setItem(key, JSON.stringify(existing));
-
-    // Try syncing back to Supabase profile
-    if (userId) {
+    // Direct persistence to Supabase delivery_addresses table
+    if (userId && isValidUUID(userId)) {
       try {
-        await supabase
-          .from('profiles')
-          .update({
-            // Store delivery address in updated timestamp or metadata
-            updated_at: now,
-          })
-          .eq('id', userId);
+        const payload: any = {
+          user_id: userId,
+          title: savedItem.title,
+          tag: savedItem.tag || 'home',
+          city: savedItem.city,
+          district: savedItem.district || null,
+          sub_district: savedItem.sub_district || null,
+          street_address: savedItem.street_address,
+          building_name: savedItem.building_name || null,
+          floor_apartment: savedItem.floor_apartment || null,
+          nearest_landmark: savedItem.nearest_landmark || null,
+          latitude: savedItem.latitude,
+          longitude: savedItem.longitude,
+          phone_contact: savedItem.phone_contact || null,
+          driver_instructions: savedItem.driver_instructions || null,
+          is_default: savedItem.is_default,
+          updated_at: now,
+        };
+
+        if (savedItem.id && isValidUUID(savedItem.id)) {
+          payload.id = savedItem.id;
+          await supabase.from('delivery_addresses').upsert(payload);
+        } else {
+          const { data: inserted } = await supabase.from('delivery_addresses').insert(payload).select().single();
+          if (inserted) {
+            savedItem.id = inserted.id;
+          }
+        }
       } catch (e) {
-        console.warn('Sync to profile:', e);
+        console.warn('Sync to delivery_addresses table:', e);
       }
     }
+
+    localStorage.setItem(key, JSON.stringify(existing));
 
     // Sync with global location store so app location reflects this address
     try {
@@ -222,6 +241,14 @@ export const useAddressStore = create<AddressStoreState>((set, get) => ({
       updated[0].is_default = true;
     }
 
+    if (userId && isValidUUID(userId) && isValidUUID(id)) {
+      try {
+        await supabase.from('delivery_addresses').delete().eq('id', id).eq('user_id', userId);
+      } catch (e) {
+        console.warn('Delete from delivery_addresses:', e);
+      }
+    }
+
     localStorage.setItem(key, JSON.stringify(updated));
 
     const defaultAddr = updated.find((a) => a.is_default) || updated[0] || null;
@@ -238,6 +265,17 @@ export const useAddressStore = create<AddressStoreState>((set, get) => ({
       ...a,
       is_default: a.id === id,
     }));
+
+    if (userId && isValidUUID(userId)) {
+      try {
+        await supabase.from('delivery_addresses').update({ is_default: false }).eq('user_id', userId);
+        if (isValidUUID(id)) {
+          await supabase.from('delivery_addresses').update({ is_default: true }).eq('id', id).eq('user_id', userId);
+        }
+      } catch (e) {
+        console.warn('Update default address:', e);
+      }
+    }
 
     localStorage.setItem(key, JSON.stringify(updated));
 

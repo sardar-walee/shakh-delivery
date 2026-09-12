@@ -574,7 +574,7 @@ export default function AppSidebar() {
                 type="button"
                 onClick={async () => {
                   closeSidebar();
-                  await signInWithGoogle('sardar.xano59@gmail.com', 'Sardar Xano');
+                  await signInWithGoogle();
                 }}
                 className="w-full py-2.5 px-4 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-100 font-bold text-xs flex items-center justify-center gap-2.5 shadow-xs border border-slate-200 dark:border-slate-700 transition-colors"
               >

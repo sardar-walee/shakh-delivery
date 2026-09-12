@@ -20,12 +20,15 @@ interface AuthState {
   loading: boolean;
   initialize: () => Promise<void>;
   signOut: () => Promise<void>;
-  signInWithGoogle: (customEmail?: string, customName?: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   setActiveRole: (role: string) => void;
 }
 
 export const ALL_SYSTEM_ROLES = [
   { id: 'role-sa', role: 'SUPER_ADMIN', labelKu: 'پلاتفۆرمی شاخ ستۆر (دەسەڵاتی پۆست لە هەموو بەشەکان)', labelAr: 'منصة شاخ ستور (نشر في كافة الأقسام)', labelEn: 'SHAKH Store Platform (Full Access All Categories)', scope: 'all' },
+  { id: 'role-admin', role: 'ADMIN', labelKu: 'بەڕێوەبەری ئۆپەراسیۆن (Operations Admin)', labelAr: 'إدارة العمليات', labelEn: 'Operations Admin', scope: 'all' },
+  { id: 'role-support', role: 'SUPPORT', labelKu: 'پشتگیری و خزمەتگوزاری بەشداربووان', labelAr: 'الدعم الفني والشكاوى', labelEn: 'Support & Helpdesk', scope: 'all' },
+  { id: 'role-captain', role: 'CAPTAIN', labelKu: 'کاپتن و گەیاندن (Courier Fleet)', labelAr: 'كابتن توصيل', labelEn: 'Delivery Captain', scope: 'captain' },
   { id: 'role-fashion', role: 'FASHION_MERCHANT', labelKu: 'فرۆشگای جل و بەرگ (تەنها جلوبەرگ)', labelAr: 'متجر الأزياء والملابس (أزياء فقط)', labelEn: 'Fashion Store (Fashion Only)', scope: 'fashion' },
   { id: 'role-cars', role: 'CARS_MERCHANT', labelKu: 'پێشانگای ئۆتۆمبێل (تەنها IQ Cars)', labelAr: 'معرض السيارات (IQ Cars فقط)', labelEn: 'Car Dealership (Cars Only)', scope: 'cars' },
   { id: 'role-food', role: 'FOOD_MERCHANT', labelKu: 'چێشتخانە و فاست فوود (تەنها خواردن)', labelAr: 'مطعم ومأكولات (أطعمة فقط)', labelEn: 'Food & Dining (Food Only)', scope: 'food' },
@@ -46,37 +49,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
-        // Check if there is an active Google user session
-        try {
-          const savedGoogle = localStorage.getItem('shakh_google_user_session');
-          if (savedGoogle) {
-            const parsed = JSON.parse(savedGoogle);
-            // Ensure parsed.user.id is a valid UUID! If legacy "google-..." ID, migrate it to standard UUID
-            if (!isValidUUID(parsed.user?.id)) {
-              const validUuid = getConsistentUUID(parsed.user?.email || 'sardar.xano59@gmail.com');
-              if (parsed.user) parsed.user.id = validUuid;
-              if (parsed.profile) parsed.profile.id = validUuid;
-              if (Array.isArray(parsed.roles)) {
-                parsed.roles.forEach((r: any) => { r.user_id = validUuid; });
-              }
-              try {
-                localStorage.setItem('shakh_google_user_session', JSON.stringify(parsed));
-              } catch {
-                // ignore
-              }
-            }
-            set({
-              user: parsed.user,
-              profile: parsed.profile,
-              roles: parsed.roles || [],
-              activeRole: parsed.activeRole || 'SUPER_ADMIN',
-              loading: false,
-            });
-            return;
-          }
-        } catch {
-          // ignore
-        }
         set({ user: null, profile: null, roles: [], activeRole: null, loading: false });
         return;
       }
@@ -86,14 +58,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       set({ user: session.user });
 
-      // Fetch profile
+      // Fetch or auto-create profile
       let userProfile: Profile | null = null;
       try {
         const { data: profile } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', session.user.id)
-          .single();
+          .maybeSingle();
 
         if (profile) {
           userProfile = profile;
@@ -102,6 +74,37 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             useThemeStore.getState().applyUserPreference(profile.theme_preference);
           } else if (session.user.user_metadata?.theme_preference) {
             useThemeStore.getState().applyUserPreference(session.user.user_metadata.theme_preference);
+          }
+        } else {
+          // Create initial profile for authenticated user
+          const initialProfile: Profile = {
+            id: session.user.id,
+            full_name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
+            email: session.user.email || null,
+            phone: session.user.user_metadata?.phone || null,
+            avatar: session.user.user_metadata?.avatar_url || null,
+            language: 'ku',
+            status: 'active',
+            theme_preference: 'dark',
+            fcm_token: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+
+          try {
+            await supabase.from('profiles').insert({
+              id: initialProfile.id,
+              full_name: initialProfile.full_name,
+              email: initialProfile.email,
+              phone: initialProfile.phone,
+              avatar: initialProfile.avatar,
+              language: initialProfile.language,
+              status: initialProfile.status,
+            });
+            userProfile = initialProfile;
+            set({ profile: initialProfile });
+          } catch {
+            set({ profile: initialProfile });
           }
         }
       } catch (err) {
@@ -151,11 +154,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           }
         }
 
+        // Auto-assign default CUSTOMER role if user has no roles yet
         if (userRolesList.length === 0) {
+          try {
+            await supabase.from('user_roles').insert({
+              user_id: session.user.id,
+              role: 'CUSTOMER',
+              status: 'approved',
+            });
+          } catch {
+            // ignore
+          }
           userRolesList = [
-            { id: 'def-sa', user_id: session.user.id, role: 'SUPER_ADMIN', status: 'approved', approved_by: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-            { id: 'def-cust', user_id: session.user.id, role: 'CUSTOMER', status: 'approved', approved_by: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-            { id: 'def-admin', user_id: session.user.id, role: 'ADMIN', status: 'approved', approved_by: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+            { id: 'def-cust', user_id: session.user.id, role: 'CUSTOMER', status: 'approved', approved_by: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
           ];
         }
 
@@ -171,13 +182,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
       } catch {
         const defaultRoles: UserRole[] = [
-          { id: 'def-sa', user_id: session.user.id, role: 'SUPER_ADMIN', status: 'approved', approved_by: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { id: 'def-cust', user_id: session.user.id, role: 'CUSTOMER', status: 'approved', approved_by: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { id: 'def-admin', user_id: session.user.id, role: 'ADMIN', status: 'approved', approved_by: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+          { id: 'def-cust', user_id: session.user.id, role: 'CUSTOMER', status: 'approved', approved_by: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
         ];
+        if (isSuperAdminEmail) {
+          defaultRoles.unshift({ id: 'def-sa', user_id: session.user.id, role: 'SUPER_ADMIN', status: 'approved', approved_by: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+        }
         set({
           roles: defaultRoles,
-          activeRole: isSuperAdminEmail ? 'SUPER_ADMIN' : (get().activeRole || 'SUPER_ADMIN'),
+          activeRole: isSuperAdminEmail ? 'SUPER_ADMIN' : 'CUSTOMER',
         });
       }
 
@@ -189,15 +201,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     // Set up auth listener
     supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+      if (['SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED', 'INITIAL_SESSION'].includes(event)) {
         if (session) {
           const userEmail = session.user.email?.toLowerCase() || '';
           const isSuperAdminEmail = SUPER_ADMIN_EMAILS.includes(userEmail);
-          set({ user: session.user, loading: true });
+          set({ user: session.user });
           
           let profileData = null;
           try {
-            const pRes = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+            const pRes = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
             profileData = pRes.data;
           } catch {
             // Profile fallback
@@ -228,10 +240,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           }
 
           if (rolesData.length === 0) {
+            try {
+              await supabase.from('user_roles').insert({
+                user_id: session.user.id,
+                role: 'CUSTOMER',
+                status: 'approved',
+              });
+            } catch {
+              // ignore
+            }
             rolesData = [
-              { id: 'def-sa', user_id: session.user.id, role: 'SUPER_ADMIN', status: 'approved', approved_by: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-              { id: 'def-cust', user_id: session.user.id, role: 'CUSTOMER', status: 'approved', approved_by: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-              { id: 'def-admin', user_id: session.user.id, role: 'ADMIN', status: 'approved', approved_by: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+              { id: 'def-cust', user_id: session.user.id, role: 'CUSTOMER', status: 'approved', approved_by: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
             ];
           }
 
@@ -256,7 +275,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signOut: async () => {
     try {
-      localStorage.removeItem('shakh_google_user_session');
       await supabase.auth.signOut();
     } catch {
       // ignore
@@ -264,150 +282,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ user: null, profile: null, roles: [], activeRole: null, loading: false });
   },
 
-  signInWithGoogle: async (customEmail?: string, customName?: string) => {
+  signInWithGoogle: async () => {
     set({ loading: true });
-    const targetEmail = (customEmail || 'sardar.xano59@gmail.com').toLowerCase();
-    const targetName = customName || 'Sardar Xano (Google Account)';
-    const isSuperAdminEmail = SUPER_ADMIN_EMAILS.includes(targetEmail);
-
     try {
-      // Trigger genuine Supabase Google OAuth
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          // Omit redirectTo to allow Supabase to use its default configured Site URL
-          // which avoids redirect_uri_mismatch in dynamic preview environments
+          redirectTo: window.location.origin,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
           },
         },
       });
-      if (!error) return;
-    } catch {
-      // Fallback to instantaneous verified Google credential session
+      if (error) {
+        console.error("Google Auth error", error);
+        set({ loading: false });
+        throw error;
+      }
+    } catch (err) {
+      console.error("Google Auth error", err);
+      set({ loading: false });
+      throw err;
     }
-
-    // Instantaneous Google Authentication Profile & Session with compliant PostgreSQL UUID
-    const userUuid = getConsistentUUID(targetEmail);
-
-    const mockGoogleUser = {
-      id: userUuid,
-      email: targetEmail,
-      email_confirmed_at: new Date().toISOString(),
-      user_metadata: {
-        full_name: targetName,
-        avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
-        provider: 'google',
-        email_verified: true,
-      },
-      app_metadata: {
-        provider: 'google',
-        providers: ['google'],
-      },
-      aud: 'authenticated',
-      role: 'authenticated',
-      created_at: new Date().toISOString(),
-    };
-
-    const simulatedProfile: Profile = {
-      id: mockGoogleUser.id,
-      full_name: targetName,
-      email: targetEmail,
-      phone: '+964 750 000 0000',
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
-      language: 'ku',
-      theme_preference: 'dark',
-      status: 'active',
-      fcm_token: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    const userRolesList: UserRole[] = [
-      {
-        id: 'r-super-admin',
-        user_id: mockGoogleUser.id,
-        role: 'SUPER_ADMIN',
-        status: 'approved',
-        approved_by: 'SHAKH Platform System',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      {
-        id: 'r-fashion',
-        user_id: mockGoogleUser.id,
-        role: 'FASHION_MERCHANT',
-        status: 'approved',
-        approved_by: 'SHAKH Platform System',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      {
-        id: 'r-cars',
-        user_id: mockGoogleUser.id,
-        role: 'CARS_MERCHANT',
-        status: 'approved',
-        approved_by: 'SHAKH Platform System',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      {
-        id: 'r-food',
-        user_id: mockGoogleUser.id,
-        role: 'FOOD_MERCHANT',
-        status: 'approved',
-        approved_by: 'SHAKH Platform System',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      {
-        id: 'r-market',
-        user_id: mockGoogleUser.id,
-        role: 'MARKET_MERCHANT',
-        status: 'approved',
-        approved_by: 'SHAKH Platform System',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      {
-        id: 'r-tech',
-        user_id: mockGoogleUser.id,
-        role: 'TECH_MERCHANT',
-        status: 'approved',
-        approved_by: 'SHAKH Platform System',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      {
-        id: 'r-cust',
-        user_id: mockGoogleUser.id,
-        role: 'CUSTOMER',
-        status: 'approved',
-        approved_by: 'SHAKH Platform System',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-    ];
-
-    try {
-      localStorage.setItem('shakh_google_user_session', JSON.stringify({
-        user: mockGoogleUser,
-        profile: simulatedProfile,
-        roles: userRolesList,
-        activeRole: 'SUPER_ADMIN',
-      }));
-    } catch {
-      // ignore
-    }
-
-    set({
-      user: mockGoogleUser,
-      profile: simulatedProfile,
-      roles: userRolesList,
-      activeRole: 'SUPER_ADMIN',
-      loading: false,
-    });
   },
 
   setActiveRole: (role: string) => {

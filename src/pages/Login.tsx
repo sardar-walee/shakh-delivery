@@ -41,24 +41,12 @@ export default function Login() {
     setGoogleLoading(true);
     setError(null);
     try {
-      await signInWithGoogle('sardar.xano59@gmail.com', 'Sardar Xano');
-      toast.success(
-        isRtl ? 'بە سەرکەوتوویی بە گووگڵ چوویتە ژوورەوە! بەخێربێیت بۆ شاخ ستۆر' : 'Successfully signed in with Google! Welcome to SHAKH Store'
-      );
-      openModal();
-      navigate('/');
+      await signInWithGoogle();
     } catch (err: any) {
       console.error('Google sign in error:', err);
       setError(err?.message || 'Google sign in failed');
-    } finally {
       setGoogleLoading(false);
     }
-  };
-
-  const handleSuperAdminFill = () => {
-    setEmail('shakh8002@gmail.com');
-    setPassword('Sardar1234ss');
-    setError(null);
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -158,17 +146,6 @@ export default function Login() {
               ? t('forgot_password_desc')
               : (isRtl ? 'شاخ ستۆر (SHAKH Store) - بازاڕ و فرۆشگاکانی کوردستان' : 'SHAKH Store - Kurdistan Marketplace & Stores')}
           </p>
-
-          {mode === 'login' && (
-            <button
-              type="button"
-              onClick={handleSuperAdminFill}
-              className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 text-xs font-semibold hover:bg-amber-100 transition-colors"
-            >
-              <Crown className="w-3.5 h-3.5 text-amber-500" />
-              <span>پڕکردنەوەی هەژماری سوپەر ئەدمین (Super Admin)</span>
-            </button>
-          )}
         </div>
 
         {error && (

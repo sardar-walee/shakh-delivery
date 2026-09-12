@@ -24,7 +24,7 @@ import {
 export default function Dashboard() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { activeRole, setActiveRole } = useAuthStore();
+  const { roles, activeRole, setActiveRole } = useAuthStore();
 
   // Roles catalogue
   const rolesList = [
@@ -86,10 +86,46 @@ export default function Dashboard() {
     },
   ];
 
-  // Current effective role
-  const effectiveRole = searchParams.get('role') || activeRole || 'SUPER_ADMIN';
+  // Current user permissions
+  const approvedRoleNames = roles.filter(r => r.status === 'approved').map(r => r.role);
+  const isSuperAdmin = approvedRoleNames.includes('SUPER_ADMIN');
+  const isAdmin = isSuperAdmin || approvedRoleNames.includes('ADMIN');
+  const isSupport = isAdmin || approvedRoleNames.includes('SUPPORT');
+  const isCaptain = isAdmin || approvedRoleNames.includes('CAPTAIN');
+  const isMerchant = isAdmin || approvedRoleNames.some(r => 
+    ['RESTAURANT', 'SUPERMARKET', 'FASHION', 'BEAUTY', 'UMRAH', 'CAR_SELLER', 'FOOD_MERCHANT', 'MARKET_MERCHANT', 'FASHION_MERCHANT', 'CARS_MERCHANT', 'TECH_MERCHANT', 'TECH'].includes(r)
+  );
+
+  const canAccessRole = (roleId: string): boolean => {
+    if (isSuperAdmin) return true;
+    if (roleId === 'SUPER_ADMIN') return false;
+    if (roleId === 'ADMIN') return isAdmin;
+    if (roleId === 'SUPPORT') return isSupport;
+    if (roleId === 'CAPTAIN') return isCaptain;
+    if (roleId === 'CAPTAIN_FINANCE') return isAdmin;
+    if (['RESTAURANT', 'SUPERMARKET', 'FASHION', 'BEAUTY', 'UMRAH', 'CAR_SELLER'].includes(roleId)) return isMerchant;
+    if (roleId === 'CUSTOMER') return true;
+    return false;
+  };
+
+  // Default allowed fallback role
+  const defaultAllowedRole = isSuperAdmin
+    ? 'SUPER_ADMIN'
+    : isAdmin
+    ? 'ADMIN'
+    : isMerchant
+    ? 'RESTAURANT'
+    : isCaptain
+    ? 'CAPTAIN'
+    : isSupport
+    ? 'SUPPORT'
+    : 'CUSTOMER';
+
+  const requestedRole = searchParams.get('role') || activeRole || defaultAllowedRole;
+  const effectiveRole = canAccessRole(requestedRole) ? requestedRole : defaultAllowedRole;
 
   const handleSwitchRole = (newRole: string) => {
+    if (!canAccessRole(newRole)) return;
     setActiveRole(newRole);
     setSearchParams({ role: newRole });
   };
@@ -106,7 +142,7 @@ export default function Dashboard() {
             </span>
           </div>
           <span className="text-[11px] font-semibold text-slate-400">
-            Switch between dedicated role dashboards
+            {isSuperAdmin ? 'Full System Access (سەرپەرشتیاری گشتی)' : 'Authorized Workspaces (داشبۆردە ڕێگەپێدراوەکان)'}
           </span>
         </div>
 
@@ -114,17 +150,23 @@ export default function Dashboard() {
           {rolesList.map((r) => {
             const Icon = r.icon;
             const isSelected = effectiveRole === r.id;
+            const allowed = canAccessRole(r.id);
+
             return (
               <button
                 key={r.id}
-                onClick={() => handleSwitchRole(r.id)}
+                onClick={() => allowed && handleSwitchRole(r.id)}
+                disabled={!allowed}
+                title={allowed ? r.label : 'Access restricted to approved role'}
                 className={`flex flex-col items-start p-2.5 rounded-xl border text-start transition-all relative overflow-hidden ${
-                  isSelected
-                    ? 'border-primary-500 bg-primary-50/40 dark:bg-primary-950/40 shadow-sm ring-1 ring-primary-500'
-                    : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                  !allowed
+                    ? 'opacity-40 cursor-not-allowed border-slate-200 dark:border-slate-800/50 bg-slate-50/50 dark:bg-slate-900/20'
+                    : isSelected
+                    ? 'border-primary-500 bg-primary-50/40 dark:bg-primary-950/40 shadow-sm ring-1 ring-primary-500 cursor-pointer'
+                    : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer'
                 }`}
               >
-                {r.id === 'SUPER_ADMIN' && (
+                {r.id === 'SUPER_ADMIN' && allowed && (
                   <span className="absolute top-1 end-1.5 w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
                 )}
                 <div className="flex items-center gap-1.5 mb-1">
