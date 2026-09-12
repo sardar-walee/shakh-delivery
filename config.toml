@@ -1,0 +1,4 @@
+project_id = "shakh"
+
+[functions.notify-user]
+verify_jwt = false
