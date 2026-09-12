@@ -154,6 +154,7 @@ export default function OrderTrackingVisualizer({
   const [copied, setCopied] = useState(false);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const [isSimulating, setIsSimulating] = useState(false);
   const [captainLivePos, setCaptainLivePos] = useState<{ lat: number; lng: number } | undefined>();
   const [simEtaMinutes, setSimEtaMinutes] = useState<number>(
     initialOrder.estimated_delivery_minutes || 25
@@ -250,12 +251,30 @@ export default function OrderTrackingVisualizer({
     return Math.min(100, Math.round((currentStepIndex / (ORDER_ORDERED_KEYS.length - 1)) * 100));
   }, [currentStepIndex, order.status]);
 
-  const captain = order.captain || null;
-  const business = order.business || null;
+  // Default Mock Captain & Business info if not populated from joins
+  const captain: CaptainInfo = order.captain || {
+    id: order.captain_id || 'capt-1',
+    name: 'ئاراس ئەحمەد (Aras Ahmed)',
+    phone: '+964 750 444 8899',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+    vehicleType: 'motorcycle',
+    vehiclePlate: 'Erbil 48291 A',
+    rating: 4.9,
+    totalDeliveries: 1420,
+  };
+
+  const business = order.business || {
+    id: order.business_id || 'biz-1',
+    name: 'KFC Kurdistan (100M)',
+    phone: '+964 750 123 4567',
+    address: '100 Meter St, Near Empire World, Erbil',
+    latitude: order.latitude ? order.latitude - 0.012 : 36.1912,
+    longitude: order.longitude ? order.longitude - 0.015 : 44.0092,
+  };
 
   const customerAddress = {
-    lat: order.latitude,
-    lng: order.longitude,
+    lat: order.latitude || 36.205,
+    lng: order.longitude || 44.025,
     label:
       typeof order.address === 'string'
         ? order.address
@@ -266,6 +285,25 @@ export default function OrderTrackingVisualizer({
     navigator.clipboard.writeText(order.order_number);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Demo / Testing Simulation: advance step via Supabase update
+  const advanceStepSim = async (nextStatus: OrderStatus) => {
+    setOrder((prev) => ({ ...prev, status: nextStatus }));
+
+    try {
+      if (isValidUUID(order.id)) {
+        await supabase.from('orders').update({ status: nextStatus }).eq('id', order.id);
+      }
+    } catch (e) {
+      console.warn('Simulated local status update:', e);
+    }
+
+    // Dynamic ETA adjustment based on stage
+    if (nextStatus === 'ON_THE_WAY') setSimEtaMinutes(12);
+    if (nextStatus === 'READY') setSimEtaMinutes(18);
+    if (nextStatus === 'PREPARING') setSimEtaMinutes(25);
+    if (nextStatus === 'DELIVERED') setSimEtaMinutes(0);
   };
 
   return (
@@ -303,7 +341,7 @@ export default function OrderTrackingVisualizer({
               </h2>
             </div>
             <p className="text-xs text-slate-300 font-medium">
-              {business?.name || '—'} • {order.total.toLocaleString()} IQD
+              {business.name} • {order.total.toLocaleString()} IQD
             </p>
           </div>
 
@@ -472,7 +510,7 @@ export default function OrderTrackingVisualizer({
             </h3>
           </div>
           <span className="text-xs text-slate-400">
-            {business?.name || '—'} ➔ {customerAddress.label}
+            {business.name} ➔ {customerAddress.label}
           </span>
         </div>
 
@@ -671,6 +709,42 @@ export default function OrderTrackingVisualizer({
           )}
         </AnimatePresence>
       </div>
+
+      {/* REALTIME SIMULATOR & TEST CONTROLS (FOR INSTANT DEMO & TESTING) */}
+      {showControls && (
+        <div className="card p-4 md:p-5 border border-dashed border-primary-300 dark:border-primary-800 bg-primary-50/30 dark:bg-primary-950/20 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Play className="w-4 h-4 text-primary-600" />
+              <span className="text-xs font-bold uppercase tracking-wider text-primary-700 dark:text-primary-300">
+                {isRtl ? 'تاقیکردنەوەی ڕاستەوخۆ (Supabase Realtime Simulator)' : 'Live Realtime Progress Simulator'}
+              </span>
+            </div>
+            <span className="text-[11px] text-slate-500">
+              {isRtl ? 'کلیک لە هەر قۆناغێک بکە بۆ تاقیکردنەوە' : 'Click any status to trigger realtime update'}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {ORDER_ORDERED_KEYS.map((stepKey) => {
+              const isCurrent = order.status === stepKey;
+              return (
+                <button
+                  key={stepKey}
+                  onClick={() => advanceStepSim(stepKey)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    isCurrent
+                      ? 'bg-primary-600 text-white shadow-sm ring-2 ring-primary-500/30'
+                      : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-primary-400'
+                  }`}
+                >
+                  {stepKey.replace(/_/g, ' ')}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Official SHAKH Order Receipt & WhatsApp Modal */}
       <OrderReceiptModal

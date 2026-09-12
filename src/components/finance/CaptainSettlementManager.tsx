@@ -1,4 +1,4 @@
-import { useState, FormEvent, useEffect } from 'react';
+import { useState, FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Bike,
@@ -48,7 +48,7 @@ export default function CaptainSettlementManager({
     captains,
     selectedCaptainId,
     setSelectedCaptainId,
-    loadCaptains,
+    addOrderToCaptain,
     resetToDefault,
   } = useCaptainFinanceStore();
 
@@ -59,25 +59,46 @@ export default function CaptainSettlementManager({
   const [activeTab, setActiveTab] = useState<'orders' | 'settlements'>('orders');
   const [orderFilter, setOrderFilter] = useState<'all' | 'food' | 'market'>('all');
   const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false);
-
-  useEffect(() => { void loadCaptains(); }, [loadCaptains]);
+  const [showAddOrderModal, setShowAddOrderModal] = useState(false);
 
   // New Order Form state
+  const [newOrderType, setNewOrderType] = useState<'food' | 'market'>('food');
+  const [newOrderStore, setNewOrderStore] = useState('');
+  const [newOrderCustomer, setNewOrderCustomer] = useState('');
+  const [newOrderAmount, setNewOrderAmount] = useState<number>(25000);
+  const [newOrderDeliveryFee, setNewOrderDeliveryFee] = useState<number>(3500);
+  const [newOrderPlatformFee, setNewOrderPlatformFee] = useState<number>(1000);
 
   const filteredOrders = captain.orders.filter((o) => {
     if (orderFilter === 'all') return true;
     return o.category === orderFilter;
   });
 
+  const handleCreateOrder = (e: FormEvent) => {
+    e.preventDefault();
+    const isFood = newOrderType === 'food';
+    const captainEarning = Math.max(0, newOrderDeliveryFee - newOrderPlatformFee);
+    const totalCash = newOrderAmount + newOrderDeliveryFee;
 
-  if (!captain) {
-    return (
-      <div className="card p-8 text-center text-slate-500">
-        <Wallet className="w-10 h-10 mx-auto mb-3 opacity-50" />
-        <p>هیچ کاپتنێکی چالاک لە داتابەیسدا نەدۆزرایەوە.</p>
-      </div>
-    );
-  }
+    addOrderToCaptain(captain.id, {
+      orderNumber: `SHAKH-${isFood ? 'FD' : 'MK'}-${Math.floor(100 + Math.random() * 900)}`,
+      category: newOrderType,
+      categoryLabelKu: isFood ? 'چێشتخانە (Food)' : 'مارکێت (Market)',
+      storeName: newOrderStore || (isFood ? 'چێشتخانەی دیوان' : 'کارفوور مارکێت'),
+      customerName: newOrderCustomer || 'کڕیاری نوێ',
+      deliveryAddress: 'هەولێر، گەڕەکی وەزیران',
+      orderAmount: newOrderAmount,
+      deliveryFee: newOrderDeliveryFee,
+      captainDeliveryFee: captainEarning,
+      platformFee: newOrderPlatformFee,
+      totalCashCollected: totalCash,
+      paymentMethod: 'CASH_ON_DELIVERY',
+    });
+
+    setShowAddOrderModal(false);
+    setNewOrderStore('');
+    setNewOrderCustomer('');
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300" dir={isRtl ? 'rtl' : 'ltr'}>
@@ -101,6 +122,14 @@ export default function CaptainSettlementManager({
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowAddOrderModal(true)}
+            className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center gap-1.5 transition-colors"
+          >
+            <Plus className="w-4 h-4 text-primary-600" />
+            <span>زیادکردنی ئۆردەر بۆ کاپتن</span>
+          </button>
 
           <button
             type="button"
@@ -291,7 +320,7 @@ export default function CaptainSettlementManager({
           <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-center">
             <span className="text-[10px] text-emerald-300 block font-sans">وەرگیراوە لە کاپتن</span>
             <span className="font-bold text-sm text-emerald-400">
-              {summary.totalReturned.toLocaleString()} IQD
+              {summary.totalReturnedCash.toLocaleString()} IQD
             </span>
           </div>
 
@@ -542,7 +571,142 @@ export default function CaptainSettlementManager({
         }}
       />
 
+      {/* Add Demo Order Modal with Explicit 3 Fields */}
+      {showAddOrderModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-5 space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="font-bold text-base text-slate-900 dark:text-white">
+                زیادکردنی ئۆردەر بۆ {captain.name}
+              </h3>
+              <button
+                onClick={() => setShowAddOrderModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-xs font-bold"
+              >
+                داخستن
+              </button>
+            </div>
 
+            <form onSubmit={handleCreateOrder} className="space-y-3 text-xs">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 dark:text-slate-300">جۆری ئۆردەر:</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewOrderType('food')}
+                    className={`py-2 px-3 rounded-xl border font-bold flex items-center justify-center gap-1.5 ${
+                      newOrderType === 'food'
+                        ? 'border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300 ring-1 ring-orange-500'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-600'
+                    }`}
+                  >
+                    <Utensils className="w-3.5 h-3.5" />
+                    <span>چێشتخانە (Food)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewOrderType('market')}
+                    className={`py-2 px-3 rounded-xl border font-bold flex items-center justify-center gap-1.5 ${
+                      newOrderType === 'market'
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 ring-1 ring-emerald-500'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-600'
+                    }`}
+                  >
+                    <ShoppingBag className="w-3.5 h-3.5" />
+                    <span>مارکێت (Market)</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 dark:text-slate-300">ناوی فرۆشگا / چێشتخانە:</label>
+                <input
+                  type="text"
+                  placeholder={newOrderType === 'food' ? 'نموونە: چێشتخانەی دیوان' : 'نموونە: کارفوور مارکێت'}
+                  value={newOrderStore}
+                  onChange={(e) => setNewOrderStore(e.target.value)}
+                  className="w-full py-2 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 dark:text-slate-300">ناوی کڕیار:</label>
+                <input
+                  type="text"
+                  placeholder="ناوی کڕیار"
+                  value={newOrderCustomer}
+                  onChange={(e) => setNewOrderCustomer(e.target.value)}
+                  className="w-full py-2 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">1. پارەی کاڵا:</label>
+                  <input
+                    type="number"
+                    step="500"
+                    value={newOrderAmount}
+                    onChange={(e) => setNewOrderAmount(Number(e.target.value))}
+                    className="w-full py-2 px-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">2. کرێی گەیاندن:</label>
+                  <input
+                    type="number"
+                    step="500"
+                    value={newOrderDeliveryFee}
+                    onChange={(e) => setNewOrderDeliveryFee(Number(e.target.value))}
+                    className="w-full py-2 px-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">3. پلاتفۆرمی شاخ:</label>
+                  <input
+                    type="number"
+                    step="250"
+                    value={newOrderPlatformFee}
+                    onChange={(e) => setNewOrderPlatformFee(Number(e.target.value))}
+                    className="w-full py-2 px-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-1 font-mono text-[11px]">
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-sans">کرێی دەستی کاپتن:</span>
+                  <span className="font-bold text-emerald-600">
+                    +{(Math.max(0, newOrderDeliveryFee - newOrderPlatformFee)).toLocaleString()} IQD
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-sans">کۆی کاشی وەرگیراو لای کاپتن:</span>
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    {(newOrderAmount + newOrderDeliveryFee).toLocaleString()} IQD
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddOrderModal(false)}
+                  className="flex-1 py-2 rounded-xl border border-slate-200 dark:border-slate-700 font-bold"
+                >
+                  داخستن
+                </button>
+                <button
+                  type="submit"
+                  className="flex-2 py-2 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-bold"
+                >
+                  تۆمارکردنی ئۆردەر
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

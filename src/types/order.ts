@@ -101,12 +101,12 @@ export interface ScheduledOrder {
   customer_phone: string;
   business_id: string;
   business_name: string;
-  captain_id?: string;
+  captain_id: string;
   category: ScheduledOrderCategory;
   category_label_ku: string;
   status: OrderStatus;
   payment_status: string;
-  payment_method: 'CASH_ON_DELIVERY';
+  payment_method: 'CASH_ON_DELIVERY' | 'FIB' | 'FASTPAY' | 'ZAIN_CASH';
   subtotal: number;
   delivery_fee: number;
   platform_fee: number;
@@ -119,7 +119,7 @@ export interface ScheduledOrder {
   address: OrderAddress;
   notes?: string | null;
   items: OrderItem[];
-  captain?: CaptainInfo;
+  captain: CaptainInfo;
   created_at: string;
   captain_notified: boolean;
   captain_notified_at: string;

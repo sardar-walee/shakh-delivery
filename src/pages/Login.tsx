@@ -41,7 +41,7 @@ export default function Login() {
     setGoogleLoading(true);
     setError(null);
     try {
-      await signInWithGoogle();
+      await signInWithGoogle('sardar.xano59@gmail.com', 'Sardar Xano');
       toast.success(
         isRtl ? 'بە سەرکەوتوویی بە گووگڵ چوویتە ژوورەوە! بەخێربێیت بۆ شاخ ستۆر' : 'Successfully signed in with Google! Welcome to SHAKH Store'
       );

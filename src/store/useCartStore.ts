@@ -2,8 +2,27 @@ import { create } from 'zustand';
 import { CartItem, CartStore } from '../types/cart';
 import { toast } from './useToastStore';
 
+const CART_STORAGE_KEY = 'shakh_shopping_cart';
+
+const loadSavedCart = (): CartItem[] => {
+  try {
+    const raw = localStorage.getItem(CART_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveCart = (items: CartItem[]) => {
+  try {
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
+  } catch (e) {
+    console.warn('Failed to persist cart to localStorage', e);
+  }
+};
+
 export const useCartStore = create<CartStore>((set, get) => ({
-  items: [],
+  items: loadSavedCart(),
   isOpen: false,
 
   toggleCart: () => set((state) => ({ isOpen: !state.isOpen })),
@@ -25,6 +44,8 @@ export const useCartStore = create<CartStore>((set, get) => ({
       } else {
         newItems = [...state.items, { ...item, quantity }];
       }
+
+      saveCart(newItems);
       return { items: newItems };
     });
 
@@ -60,6 +81,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
 
     set((state) => {
       const newItems = state.items.filter((i) => i.id !== id);
+      saveCart(newItems);
       return { items: newItems };
     });
 
@@ -90,6 +112,8 @@ export const useCartStore = create<CartStore>((set, get) => ({
           return i;
         })
         .filter(Boolean) as CartItem[];
+
+      saveCart(newItems);
       return { items: newItems };
     });
   },
@@ -100,6 +124,8 @@ export const useCartStore = create<CartStore>((set, get) => ({
         quantity <= 0
           ? state.items.filter((i) => i.id !== id)
           : state.items.map((i) => (i.id === id ? { ...i, quantity } : i));
+
+      saveCart(newItems);
       return { items: newItems };
     });
   },
@@ -107,6 +133,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
   clearCart: (showToastFeedback = true) => {
     const previousItems = get().items;
     set({ items: [] });
+    saveCart([]);
 
     if (showToastFeedback && previousItems.length > 0) {
       toast.info('سەبەتەی کڕین بەتاڵ کرایەوە / Cart cleared', {
@@ -114,6 +141,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
           label: 'گەڕاندنەوە / Undo',
           onClick: () => {
             set({ items: previousItems });
+            saveCart(previousItems);
             toast.success('سەبەتەی کڕین گەڕێندرایەوە / Cart restored');
           },
         },

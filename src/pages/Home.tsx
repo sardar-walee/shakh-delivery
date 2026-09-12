@@ -1,21 +1,19 @@
 import { useTranslation } from 'react-i18next';
 import { Search, MapPin, Store, UtensilsCrossed, Shirt, Car, Heart, Sparkles, Navigation, ChevronDown, Menu } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useLocationStore } from '../store/useLocationStore';
 import { useSidebarStore } from '../store/useSidebarStore';
 import { useSocialStore } from '../store/useSocialStore';
-import { supabase } from '../lib/supabase';
 import SocialFeed from '../components/social/SocialFeed';
 
 export default function Home() {
   const { t, i18n } = useTranslation();
   const currentLang = (i18n.language || 'ku') as 'ku' | 'ar' | 'en';
-  const { currentLocation, openModal, hasPromptedOnEntry, setHasPromptedOnEntry } = useLocationStore();
+  const { currentLocation, openModal, hasPromptedOnEntry } = useLocationStore();
   const { openSidebar } = useSidebarStore();
   const { posts, openPostDetail } = useSocialStore();
   const [searchParams] = useSearchParams();
-  const [popularBusinesses, setPopularBusinesses] = useState<any[]>([]);
 
   // Handle deep-linked post from shared social URL (?post=post-1)
   useEffect(() => {
@@ -28,31 +26,16 @@ export default function Home() {
     }
   }, [searchParams, posts, openPostDetail]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const loadPopularBusinesses = async () => {
-      const { data, error } = await supabase
-        .from('businesses')
-        .select('id,name,type,logo,rating,address,is_open')
-        .eq('status', 'active')
-        .order('rating', { ascending: false })
-        .limit(8);
-      if (!cancelled && !error) setPopularBusinesses(data || []);
-    };
-    void loadPopularBusinesses();
-    return () => { cancelled = true; };
-  }, []);
-
   // Prompt location selector on initial entry if not chosen yet
   useEffect(() => {
-    if (!hasPromptedOnEntry) {
+    const chosen = localStorage.getItem('shakh_location_chosen');
+    if (!chosen && !hasPromptedOnEntry) {
       const timer = setTimeout(() => {
-        setHasPromptedOnEntry(true);
         openModal();
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [hasPromptedOnEntry, openModal, setHasPromptedOnEntry]);
+  }, [hasPromptedOnEntry, openModal]);
 
   const categories = [
     { id: 'food', name: t('restaurants'), icon: UtensilsCrossed, color: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' },
@@ -100,7 +83,7 @@ export default function Home() {
       </div>
 
       {/* Quick Location Alert Banner if not chosen */}
-      {!hasPromptedOnEntry && (
+      {!localStorage.getItem('shakh_location_chosen') && (
         <div className="p-3.5 rounded-2xl bg-gradient-to-r from-primary-500/10 via-amber-500/10 to-primary-500/10 border border-primary-200 dark:border-primary-800 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-primary-600 text-white flex items-center justify-center shrink-0">
@@ -196,48 +179,34 @@ export default function Home() {
       {/* Social Media Feed & Posts Section */}
       <SocialFeed />
 
-      {/* Popular Businesses — live Supabase data only */}
+      {/* Popular Businesses */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold font-display">{t('popular')} {t('restaurants')}</h2>
           <Link to="/marketplace" className="text-primary-600 font-medium text-sm hover:underline">View All</Link>
         </div>
-        {popularBusinesses.length > 0 ? (
-          <div className="flex gap-4 overflow-x-auto pb-4 snap-x hide-scrollbar">
-            {popularBusinesses.map((business) => (
-              <Link
-                key={business.id}
-                to={`/marketplace?business=${business.id}`}
-                className="min-w-[240px] md:min-w-[300px] snap-start card p-0 overflow-hidden group"
-              >
-                <div className="h-32 bg-slate-200 dark:bg-slate-800 relative overflow-hidden">
-                  {business.logo ? (
-                    <img src={business.logo} alt={business.name} className="w-full h-full object-cover" loading="lazy" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-slate-400">
-                      <Store className="w-10 h-10" />
-                    </div>
-                  )}
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3">
-                    <span className="text-white text-xs font-bold">{Number(business.rating || 0).toFixed(1)} ★</span>
-                  </div>
+        <div className="flex gap-4 overflow-x-auto pb-4 snap-x hide-scrollbar">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="min-w-[240px] md:min-w-[300px] snap-start card p-0 overflow-hidden group cursor-pointer">
+              <div className="h-32 bg-slate-200 dark:bg-slate-800 relative overflow-hidden">
+                {/* Image placeholder */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
+                <div className="absolute bottom-3 left-3 flex gap-2">
+                  <span className="bg-white/90 text-slate-900 text-xs font-bold px-2 py-1 rounded-md">4.8 ★</span>
+                  <span className="bg-white/90 text-slate-900 text-xs font-medium px-2 py-1 rounded-md">20-30 min</span>
                 </div>
-                <div className="p-4">
-                  <h3 className="font-bold text-lg mb-1 group-hover:text-primary-600 transition-colors truncate">{business.name}</h3>
-                  <p className="text-sm text-slate-500 mb-3">{business.address || ''}</p>
-                  <div className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300">
-                    <UtensilsCrossed className="w-4 h-4 text-primary-500" />
-                    <span>{business.is_open === false ? (currentLang === 'ku' ? 'داخراوە' : 'Closed') : (currentLang === 'ku' ? 'کراوەیە' : 'Open')}</span>
-                  </div>
+              </div>
+              <div className="p-4">
+                <h3 className="font-bold text-lg mb-1 group-hover:text-primary-600 transition-colors">Restaurant Name</h3>
+                <p className="text-sm text-slate-500 mb-3">Burger • Fast Food</p>
+                <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
+                  <UtensilsCrossed className="w-4 h-4 text-primary-500" />
+                  <span>Free Delivery</span>
                 </div>
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <div className="card p-6 text-center text-sm text-slate-500">
-            {currentLang === 'ku' ? 'هیچ دوکانێکی چالاک نییە.' : 'No active stores yet.'}
-          </div>
-        )}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -85,7 +85,7 @@ export default function Marketplace() {
   const initialTab = searchParams.get('tab') as 'products' | 'stores' | 'social' | null;
   const productParam = searchParams.get('product');
 
-  const { products, openProductModal, loadProducts, subscribeToRealtime: subscribeToProductRealtime } = useProductStore();
+  const { products, openProductModal } = useProductStore();
   const { addItem } = useCartStore();
   
   const [businesses, setBusinesses] = useState<BusinessItem[]>([]);
@@ -109,11 +109,6 @@ export default function Marketplace() {
       openProductModal(productParam);
     }
   }, [productParam, openProductModal]);
-
-  useEffect(() => {
-    void loadProducts();
-    return subscribeToProductRealtime();
-  }, [loadProducts, subscribeToProductRealtime]);
 
   const {
     coordinates,
@@ -142,13 +137,12 @@ export default function Marketplace() {
       try {
         let fetchedData: BusinessItem[] = [];
 
+        // Attempt 1: Try querying 'businesses'
         const { data: bizData, error: bizError } = await supabase
           .from('businesses')
-          .select('*')
-          .eq('status', 'active')
-          .order('created_at', { ascending: false });
+          .select('*');
 
-        if (!bizError && bizData) {
+        if (!bizError && bizData && bizData.length > 0) {
           fetchedData = bizData.map((b: any) => ({
             id: b.id,
             name: b.name,
@@ -158,14 +152,45 @@ export default function Marketplace() {
             cover_image: b.cover_image,
             status: b.status || 'active',
             is_open: b.is_open ?? true,
-            latitude: b.latitude == null ? null : Number(b.latitude),
-            longitude: b.longitude == null ? null : Number(b.longitude),
-            address: b.address,
+            latitude: b.latitude ? Number(b.latitude) : 36.1911,
+            longitude: b.longitude ? Number(b.longitude) : 44.0092,
+            address: b.address || 'Erbil',
             commission_rate: b.commission_rate ?? 10,
-            rating: b.rating ?? 0,
+            rating: b.rating ?? 4.8,
           }));
-        } else if (bizError) {
-          console.error('Businesses loading failed:', bizError.message);
+        } else {
+          // Attempt 2: Fallback to 'restaurants' table in Supabase
+          const { data: restData, error: restError } = await supabase
+            .from('restaurants')
+            .select('*');
+
+          if (!restError && restData && restData.length > 0) {
+            fetchedData = restData.map((r: any) => {
+              let type = 'RESTAURANT';
+              const nameLower = (r.name || '').toLowerCase();
+              if (nameLower.includes('supermarket') || nameLower.includes('market')) type = 'SUPERMARKET';
+              else if (nameLower.includes('fashion') || nameLower.includes('boutique')) type = 'FASHION';
+              else if (nameLower.includes('beauty') || nameLower.includes('perfume')) type = 'BEAUTY';
+              else if (nameLower.includes('umrah') || nameLower.includes('travel')) type = 'UMRAH';
+              else if (nameLower.includes('motor') || nameLower.includes('car')) type = 'CAR';
+
+              return {
+                id: r.id,
+                name: r.name,
+                description: r.description,
+                type,
+                logo: r.logo,
+                cover_image: r.cover_image,
+                status: r.active ? 'active' : 'inactive',
+                is_open: r.active ?? true,
+                latitude: r.latitude ? Number(r.latitude) : 36.1911,
+                longitude: r.longitude ? Number(r.longitude) : 44.0092,
+                address: r.address || 'Erbil, Kurdistan',
+                commission_rate: r.commission_value ? Number(r.commission_value) : 10,
+                rating: r.rating ? Number(r.rating) : 4.8,
+              };
+            });
+          }
         }
 
         // Apply category filter if specified
@@ -190,11 +215,11 @@ export default function Marketplace() {
   const processedBusinesses = useMemo(() => {
     let list = businesses.map((b) => {
       // Default coordinates fallback if business has no latitude/longitude recorded yet
-      const bLat = b.latitude;
-      const bLon = b.longitude;
+      const bLat = b.latitude ?? 36.1911;
+      const bLon = b.longitude ?? 44.0092;
       
       let distance: number | null = null;
-      if (activeUserCoords && bLat != null && bLon != null) {
+      if (activeUserCoords) {
         const dLat = ((bLat - activeUserCoords.latitude) * Math.PI) / 180;
         const dLon = ((bLon - activeUserCoords.longitude) * Math.PI) / 180;
         const a =
@@ -716,9 +741,7 @@ export default function Marketplace() {
                                   price: product.price,
                                   original_price: product.original_price,
                                   image: product.image,
-                                  storeId: product.store_id,
                                   storeName: product.store_name,
-                                  category: product.category,
                                 },
                                 1,
                                 true

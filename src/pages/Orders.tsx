@@ -27,6 +27,50 @@ import { isValidUUID } from '../utils/uuid';
 
 type DbOrder = Database['public']['Tables']['orders']['Row'];
 
+const DEMO_ORDER: TrackedOrder = {
+  id: 'demo-order-101',
+  order_number: 'SHAKH-84920412',
+  customer_id: 'cust-demo',
+  business_id: 'biz-1',
+  captain_id: 'capt-1',
+  status: 'ON_THE_WAY',
+  payment_status: 'Cash on Delivery (COD)',
+  subtotal: 24500,
+  delivery_fee: 3000,
+  platform_fee: 500,
+  discount: 2000,
+  total: 26000,
+  address: {
+    street: 'Bakhtiyari Main St, Near Family Mall',
+    city: 'Erbil',
+    district: 'Erbil Central',
+    building: 'A3, Apt 14',
+  },
+  latitude: 36.205,
+  longitude: 44.025,
+  notes: 'Please call when arriving at gate 2',
+  created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+  updated_at: new Date().toISOString(),
+  estimated_delivery_minutes: 14,
+  business: {
+    id: 'biz-1',
+    name: 'Burger Lab Erbil (100M)',
+    phone: '+964 750 123 4567',
+    address: '100 Meter St, Erbil',
+    latitude: 36.1912,
+    longitude: 44.0092,
+  },
+  captain: {
+    id: 'capt-1',
+    name: 'ئاراس ئەحمەد (Aras Ahmed)',
+    phone: '+964 750 444 8899',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+    vehicleType: 'motorcycle',
+    vehiclePlate: 'Erbil 48291 A',
+    rating: 4.9,
+    totalDeliveries: 1420,
+  },
+};
 
 export default function Orders() {
   const { t, i18n } = useTranslation();
@@ -170,6 +214,14 @@ export default function Orders() {
           </p>
         </div>
 
+        {/* Demo Live Tracker Trigger */}
+        <button
+          onClick={() => setActiveTrackingOrder(DEMO_ORDER)}
+          className="px-4 py-2 rounded-2xl bg-gradient-to-r from-primary-600 to-indigo-600 hover:from-primary-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md flex items-center gap-2 transition-all group"
+        >
+          <Zap className="w-4 h-4 text-amber-300 group-hover:scale-110 transition-transform" />
+          <span>{isRtl ? 'تاقیکردنەوەی بەدواداچوونی ڕاستەوخۆ' : 'Test Live Visualizer'}</span>
+        </button>
       </div>
 
       {/* ACTIVE REAL-TIME ORDER TRACKING VISUALIZER (HERO SECTION) */}
@@ -308,6 +360,23 @@ export default function Orders() {
                 ? 'کاتێک داواکاری تۆمار دەکەیت لە فرۆشگاکان، بەدواداچوونی ڕاستەوخۆ لێرە دەردەکەوێت.'
                 : 'When you place orders, real-time tracking will appear here automatically.'}
             </p>
+            <div className="flex flex-wrap justify-center gap-2 pt-2">
+              <button
+                onClick={() => setActiveTrackingOrder(DEMO_ORDER)}
+                className="px-4 py-2 rounded-xl bg-primary-600 text-white font-bold text-xs hover:bg-primary-500 transition-colors inline-flex items-center gap-1.5 shadow-xs"
+              >
+                <Zap className="w-4 h-4 text-amber-300" />
+                <span>{isRtl ? 'تاقیکردنەوەی بەدواداچوونی مۆدێل' : 'Preview Live Demo'}</span>
+              </button>
+
+              <button
+                onClick={() => setSelectedOrderForReceipt(DEMO_ORDER)}
+                className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-500 transition-colors inline-flex items-center gap-1.5 shadow-xs"
+              >
+                <MessageSquare className="w-4 h-4 text-white" />
+                <span>{isRtl ? 'وەسلی کڕین و وەتسئاپ (Demo)' : 'Sample WhatsApp Receipt'}</span>
+              </button>
+            </div>
           </div>
         )}
       </div>

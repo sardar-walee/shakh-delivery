@@ -22,13 +22,7 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true,
-    "typeRoots": [
-      "./src/empty-types"
-    ]
+    "types": ["vite/client"]
   },
-  "exclude": [
-    "node_modules",
-    "dist",
-    "supabase"
-  ]
+  "exclude": ["node_modules", "dist", "supabase"]
 }

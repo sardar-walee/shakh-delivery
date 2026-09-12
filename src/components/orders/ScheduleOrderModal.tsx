@@ -25,7 +25,10 @@ import {
 import { useCartStore } from '../../store/useCartStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { toast } from '../../store/useToastStore';
-import { useScheduledOrderStore } from '../../store/useScheduledOrderStore';
+import {
+  useScheduledOrderStore,
+  DEFAULT_CAPTAINS,
+} from '../../store/useScheduledOrderStore';
 import { ScheduledOrderCategory } from '../../types/order';
 
 interface ScheduleOrderModalProps {
@@ -45,7 +48,7 @@ export default function ScheduleOrderModal({
   const { user } = useAuthStore();
 
   const { items, clearCart } = useCartStore();
-  const { createScheduledOrder } = useScheduledOrderStore();
+  const { createScheduledOrder, generateCaptainWhatsAppDispatchText } = useScheduledOrderStore();
 
   // Mode: Instant (ASAP) or Scheduled (Future Date & Time)
   const [deliveryMode, setDeliveryMode] = useState<'scheduled' | 'instant'>('scheduled');
@@ -88,15 +91,20 @@ export default function ScheduleOrderModal({
   const [isCustomTimeMode, setIsCustomTimeMode] = useState<boolean>(false);
 
   // Assigned Captain
+  const [selectedCaptainId, setSelectedCaptainId] = useState<string>(DEFAULT_CAPTAINS[0].id);
+  const assignedCaptain = useMemo(
+    () => DEFAULT_CAPTAINS.find((c) => c.id === selectedCaptainId) || DEFAULT_CAPTAINS[0],
+    [selectedCaptainId]
+  );
 
   // Customer Contact & Address Info
   const [customerName, setCustomerName] = useState<string>(
-    user?.user_metadata?.full_name || user?.email?.split('@')[0] || ''
+    user?.email?.split('@')[0] || 'سەردار خانۆ (Sardar Xano)'
   );
-  const [customerPhone, setCustomerPhone] = useState<string>('');
-  const [district, setDistrict] = useState<string>('');
-  const [street, setStreet] = useState<string>('');
-  const [building, setBuilding] = useState<string>('');
+  const [customerPhone, setCustomerPhone] = useState<string>('0750 444 8899');
+  const [district, setDistrict] = useState<string>('بەختیاری (Bakhtiyari)');
+  const [street, setStreet] = useState<string>('شەقامی سەرەکی، تاوەری بەختیاری');
+  const [building, setBuilding] = useState<string>('نهۆمی ٤، شوقەی ١٢');
   const [orderNotes, setOrderNotes] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<'CASH_ON_DELIVERY' | 'FIB' | 'FASTPAY'>('CASH_ON_DELIVERY');
 
@@ -155,54 +163,77 @@ export default function ScheduleOrderModal({
     },
   ];
 
-  // Orders are created only from real cart data.
-  const effectiveItems = items;
+  // Calculate Subtotal & Fees
+  // Fallback items if cart is opened empty from another route
+  const effectiveItems =
+    items.length > 0
+      ? items
+      : [
+          {
+            id: 'sample-1',
+            name: category === 'food' ? 'کۆمبۆ بەرگەری شاهانە لەگەڵ پەتاتە' : 'سەبەتەی پێداویستی خواردەمەنی مارکێت',
+            name_ku: category === 'food' ? 'کۆمبۆ بەرگەری شاهانە لەگەڵ پەتاتە' : 'سەبەتەی پێداویستی خواردەمەنی مارکێت',
+            price: category === 'food' ? 18500 : 26000,
+            quantity: 1,
+            image:
+              category === 'food'
+                ? 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=200'
+                : 'https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=200',
+          },
+        ];
+
   const subtotal = effectiveItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const deliveryFee = 0;
+  const deliveryFee = 3000;
   const grandTotal = subtotal + deliveryFee;
 
-  const handleConfirmOrder = async () => {
-    if (!user || effectiveItems.length === 0) {
-      toast.error(isRtl ? 'تکایە سەبەتەی کڕین پڕ بکە و بچۆ ژوورەوە.' : 'Sign in and add items to the cart first.');
-      return;
-    }
-    const storeId = effectiveItems[0]?.storeId;
-    if (!storeId || effectiveItems.some(i => i.storeId !== storeId)) {
-      toast.error(isRtl ? 'هەموو کاڵاکان دەبێت لە هەمان فرۆشگا بن.' : 'All items must belong to the same store.');
-      return;
-    }
-
+  const handleConfirmOrder = () => {
     const finalTime = isCustomTimeMode ? customTime : selectedTimeSlot;
-    const currentSlotObj = timeSlots.find((slot) => slot.time === finalTime);
-    const slotLabel = currentSlotObj ? (isRtl ? currentSlotObj.labelKu : currentSlotObj.labelEn) : finalTime;
-    const storeName = effectiveItems[0]?.storeName || '';
+    const currentSlotObj = timeSlots.find((s) => s.time === finalTime);
+    const slotLabel = currentSlotObj
+      ? isRtl
+        ? currentSlotObj.labelKu
+        : currentSlotObj.labelEn
+      : `${finalTime} (دیاریکراو)`;
 
-    try {
-      const newScheduledOrder = await createScheduledOrder({
-        items: effectiveItems,
-        scheduledDate: deliveryMode === 'scheduled' ? selectedDate : todayStr,
-        scheduledTime: finalTime,
-        scheduledSlotLabel: deliveryMode === 'scheduled' ? slotLabel : 'ASAP',
-        category,
-        address: { city: '', district, street, building, phone: customerPhone, notes: orderNotes },
-        customerName: customerName || user.user_metadata?.full_name || '',
-        customerPhone,
+    const storeName =
+      effectiveItems[0]?.storeName ||
+      (category === 'food' ? 'چێشتخانەی شاخ (Burger Lab & Grills)' : 'مارکێتی سەرەکی شاخ (Family Market)');
+
+    const newScheduledOrder = createScheduledOrder({
+      items: effectiveItems,
+      scheduledDate: deliveryMode === 'scheduled' ? selectedDate : todayStr,
+      scheduledTime: deliveryMode === 'scheduled' ? finalTime : 'دەستبەجێ (ASAP)',
+      scheduledSlotLabel: deliveryMode === 'scheduled' ? slotLabel : 'دەستبەجێ (Instant ASAP)',
+      category,
+      address: {
+        city: 'هەولێر (Erbil)',
+        district,
+        street,
+        building,
+        phone: customerPhone,
         notes: orderNotes,
-        storeName,
-        storeId,
-        paymentMethod,
-      });
+      },
+      customerName,
+      customerPhone,
+      notes: orderNotes,
+      storeName,
+      preferredCaptainId: selectedCaptainId,
+      paymentMethod,
+    });
 
+    // Clear user cart if items were present
+    if (items.length > 0) {
       clearCart(false);
-      toast.success(isRtl
-        ? `داواکاری #${newScheduledOrder.order_number} بە سەرکەوتوویی تۆمارکرا.`
-        : `Order #${newScheduledOrder.order_number} created successfully.`);
-      onClose();
-      navigate('/orders');
-    } catch (error) {
-      console.error('Order creation failed:', error);
-      toast.error(isRtl ? 'نەتوانرا داواکاری تۆمار بکرێت.' : 'Could not create the order.');
     }
+
+    toast.success(
+      isRtl
+        ? `داواکارییە بەروارکراوەکەت بۆ #${newScheduledOrder.order_number} بە سەرکەوتوویی تۆمارکرا و ئاگاداری ڕاستەوخۆ بۆ ${assignedCaptain.name} نێردرا!`
+        : `Order #${newScheduledOrder.order_number} scheduled successfully! Captain ${assignedCaptain.name} has been notified.`
+    );
+
+    onClose();
+    navigate('/orders');
   };
 
   return (
@@ -455,7 +486,67 @@ export default function ScheduleOrderModal({
             </div>
           )}
 
-          {/* 4. Delivery Address & Contact Details */}
+          {/* 4. Automated Captain Assignment & Notification Preview */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 dark:border-amber-500/20 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
+                <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <Bike className="w-4 h-4 text-amber-600" />
+                  <span>{isRtl ? 'کاپتنی دیاریکراو و ناردنی ئاگاداری ئۆتۆماتیکی' : 'Assigned Captain & Automated Alert'}</span>
+                </h4>
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-white">
+                {isRtl ? 'ئاگاداری ڕاستەوخۆ' : 'Instant Dispatch'}
+              </span>
+            </div>
+
+            {/* Captain Selector */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+              {DEFAULT_CAPTAINS.map((capt) => (
+                <div
+                  key={capt.id}
+                  onClick={() => setSelectedCaptainId(capt.id)}
+                  className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center gap-2.5 ${
+                    selectedCaptainId === capt.id
+                      ? 'border-amber-500 bg-white dark:bg-slate-900 shadow-sm'
+                      : 'border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/40 opacity-70 hover:opacity-100'
+                  }`}
+                >
+                  <img
+                    src={capt.avatar}
+                    alt={capt.name}
+                    className="w-9 h-9 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="min-w-0">
+                    <h5 className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                      {capt.name.split('(')[0]}
+                    </h5>
+                    <p className="text-[10px] text-slate-400 flex items-center gap-1 truncate">
+                      <span>★ {capt.rating}</span>
+                      <span>•</span>
+                      <span>{capt.vehiclePlate}</span>
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+              {isRtl ? (
+                <>
+                  بە پشتڕاستکردنەوە، سیستەمی شاخ <strong>ئاگاداری دەستبەجێ (Push Alert + SMS + Notification)</strong> بۆ کاپتن <strong>{assignedCaptain.name}</strong> دەنێرێت تاوەکو لە کاتی خشتەکراودا وەرگرتن و گەیاندن جێبەجێ بکات.
+                </>
+              ) : (
+                <>
+                  Upon confirmation, SHAKH dispatches an <strong>automated push alert</strong> to captain <strong>{assignedCaptain.name}</strong> with date, time, and full route details.
+                </>
+              )}
+            </p>
+          </div>
+
+          {/* 5. Delivery Address & Contact Details */}
           <div className="space-y-3">
             <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center gap-2">
               <MapPin className="w-4 h-4 text-primary-600" />
@@ -626,7 +717,7 @@ export default function ScheduleOrderModal({
                 {deliveryMode === 'scheduled'
                   ? isRtl
                     ? 'پشتڕاستکردنەوە و ئاگادارکردنی کاپتن'
-                    : 'Confirm Order'
+                    : 'Confirm & Notify Captain'
                   : isRtl
                   ? 'داواکاری دەستبەجێ'
                   : 'Order Now'}

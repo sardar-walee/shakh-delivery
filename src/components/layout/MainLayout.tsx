@@ -1,7 +1,7 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useEffect } from 'react';
-import { Home, Store, ClipboardList, User, Search, Bell, LayoutDashboard, Crown, MapPin, ChevronDown, Menu, ShoppingBag, Sun, Moon } from 'lucide-react';
+import { Home, Store, ClipboardList, User, Search, Bell, LayoutDashboard, Crown, MapPin, ChevronDown, Menu, ShoppingBag, Sun, Moon, LogOut } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useLocationStore } from '../../store/useLocationStore';
 import { useSidebarStore } from '../../store/useSidebarStore';
@@ -21,7 +21,7 @@ import { useScheduledOrderStore } from '../../store/useScheduledOrderStore';
 export default function MainLayout() {
   const { t, i18n } = useTranslation();
   const location = useLocation();
-  const { user, activeRole } = useAuthStore();
+  const { user, activeRole, signOut } = useAuthStore();
   const { currentLocation, openModal } = useLocationStore();
   const { openSidebar } = useSidebarStore();
   const { toggleCart, getItemCount } = useCartStore();
@@ -159,11 +159,20 @@ export default function MainLayout() {
               {t('login')}
             </Link>
           ) : (
-            <Link to="/profile" className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 ml-2 overflow-hidden">
-              <div className="w-full h-full flex items-center justify-center text-slate-500">
-                <User className="w-5 h-5" />
-              </div>
-            </Link>
+            <div className="flex items-center gap-2 ml-2">
+              <Link to="/profile" className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden hover:ring-2 hover:ring-primary-500 transition-all" title="Profile">
+                <div className="w-full h-full flex items-center justify-center text-slate-500 dark:text-slate-400">
+                  <User className="w-5 h-5" />
+                </div>
+              </Link>
+              <button 
+                onClick={() => signOut()} 
+                className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors flex items-center justify-center"
+                title="Logout"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
           )}
         </div>
       </header>

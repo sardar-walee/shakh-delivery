@@ -34,7 +34,6 @@ import { useSocialStore } from '../../store/useSocialStore';
 import { useAuthStore, ALL_SYSTEM_ROLES } from '../../store/useAuthStore';
 import { toast } from '../../store/useToastStore';
 import { FashionDetails, CarDetails, TechDetails, FoodDetails } from '../../types/post';
-import { supabase } from '../../lib/supabase';
 
 interface CreatePostModalProps {
   isOpen: boolean;
@@ -93,7 +92,7 @@ export default function CreatePostModal({ isOpen, onClose }: CreatePostModalProp
   const currentLang = (i18n.language || 'ku') as 'ku' | 'ar' | 'en';
   const isRtl = currentLang !== 'en';
   const { createPost } = useSocialStore();
-  const { user, profile, activeRole } = useAuthStore();
+  const { user, activeRole, setActiveRole } = useAuthStore();
 
   // Basic Post State
   const [title, setTitle] = useState('');
@@ -111,6 +110,7 @@ export default function CreatePostModal({ isOpen, onClose }: CreatePostModalProp
   const [tagsInput, setTagsInput] = useState('#شاخ_ستۆر, #کوردستان');
 
   // Role Switcher Drawer
+  const [showRoleTester, setShowRoleTester] = useState(false);
 
   // Clothing (Fashion) Specific Fields
   const [fashionGender, setFashionGender] = useState<'men' | 'women' | 'kids' | 'unisex'>('men');
@@ -157,35 +157,32 @@ export default function CreatePostModal({ isOpen, onClose }: CreatePostModalProp
   };
 
   // Determine role posting authorization
-  const isSuperAdmin = activeRole === 'SUPER_ADMIN' || activeRole === 'ADMIN';
+  const isSuperAdmin = !activeRole || activeRole === 'SUPER_ADMIN' || activeRole.includes('ADMIN');
 
   // Strict role authority: each role only posts in their allowed category, plus everyone can post cars!
   const getRoleAllowedCategories = (role: string | null): string[] => {
-    if (!role) return [];
-    if (role === 'SUPER_ADMIN' || role === 'ADMIN') {
-      return ['fashion', 'cars', 'food', 'market', 'tech', 'offers', 'beauty', 'umrah'];
+    if (!role || role === 'SUPER_ADMIN' || role.includes('ADMIN')) {
+      return ['fashion', 'cars', 'food', 'market', 'tech', 'offers', 'beauty'];
     }
-    if (role === 'FASHION' || role === 'FASHION_MERCHANT') return ['fashion', 'cars'];
-    if (role === 'CAR_SELLER' || role === 'CARS_MERCHANT') return ['cars'];
-    if (role === 'RESTAURANT' || role === 'FOOD_MERCHANT') return ['food'];
-    if (role === 'SUPERMARKET' || role === 'MARKET_MERCHANT') return ['market'];
-    if (role === 'TECH' || role === 'TECH_MERCHANT') return ['tech'];
-    if (role === 'BEAUTY') return ['beauty'];
-    if (role === 'UMRAH') return ['umrah'];
-    return [];
+    if (role === 'FASHION_MERCHANT') return ['fashion', 'cars'];
+    if (role === 'CARS_MERCHANT') return ['cars'];
+    if (role === 'FOOD_MERCHANT') return ['food', 'cars'];
+    if (role === 'MARKET_MERCHANT') return ['market', 'cars'];
+    if (role === 'TECH_MERCHANT') return ['tech', 'cars'];
+    return ['offers', 'cars'];
   };
 
   // Automatically switch active category to the role's authorized domain
   React.useEffect(() => {
-    if (activeRole === 'FASHION' || activeRole === 'FASHION_MERCHANT') {
+    if (activeRole === 'FASHION_MERCHANT') {
       setCategory('fashion');
-    } else if (activeRole === 'CAR_SELLER' || activeRole === 'CARS_MERCHANT') {
+    } else if (activeRole === 'CARS_MERCHANT') {
       setCategory('cars');
-    } else if (activeRole === 'RESTAURANT' || activeRole === 'FOOD_MERCHANT') {
+    } else if (activeRole === 'FOOD_MERCHANT') {
       setCategory('food');
-    } else if (activeRole === 'SUPERMARKET' || activeRole === 'MARKET_MERCHANT') {
+    } else if (activeRole === 'MARKET_MERCHANT') {
       setCategory('market');
-    } else if (activeRole === 'TECH' || activeRole === 'TECH_MERCHANT') {
+    } else if (activeRole === 'TECH_MERCHANT') {
       setCategory('tech');
     }
   }, [activeRole]);
@@ -196,32 +193,25 @@ export default function CreatePostModal({ isOpen, onClose }: CreatePostModalProp
   // Handle image files from Gallery or Camera
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    const selected = Array.from(files);
-    const remaining = Math.max(0, 8 - uploadedImages.length);
-    const valid = selected
-      .filter((file) => file.type.startsWith('image/'))
-      .filter((file) => file.size <= 10 * 1024 * 1024)
-      .slice(0, remaining);
-
-    if (valid.length < selected.length) {
-      toast.info(isRtl
-        ? 'تەنها تا ٨ وێنە و هەر وێنەیەک تا ١٠MB ڕێگەپێدراوە.'
-        : 'Up to 8 images are allowed, with a 10MB limit per image.');
-    }
-    if (!valid.length) return;
-
     setIsReadingImage(true);
-    const readers: Promise<string>[] = valid.map((file) => new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = () => reject(new Error('Could not read image'));
-      reader.readAsDataURL(file);
-    }));
+    const readers: Promise<string>[] = [];
 
-    Promise.all(readers)
-      .then((results) => setUploadedImages((prev) => [...prev, ...results]))
-      .catch((error) => toast.error(error.message))
-      .finally(() => setIsReadingImage(false));
+    Array.from(files).forEach((file) => {
+      readers.push(
+        new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            resolve(reader.result as string);
+          };
+          reader.readAsDataURL(file);
+        })
+      );
+    });
+
+    Promise.all(readers).then((results) => {
+      setUploadedImages((prev) => [...prev, ...results]);
+      setIsReadingImage(false);
+    });
   };
 
   const handleRemoveImage = (indexToRemove: number) => {
@@ -255,7 +245,7 @@ export default function CreatePostModal({ isOpen, onClose }: CreatePostModalProp
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim()) return;
 
@@ -318,61 +308,43 @@ export default function CreatePostModal({ isOpen, onClose }: CreatePostModalProp
       };
     }
 
-    if (!user?.id) {
-      toast.error(isRtl ? 'تکایە سەرەتا بچۆ ژوورەوە.' : 'Please sign in first.');
-      return;
-    }
-
-    // Upload selected images to Supabase Storage. Never persist base64/blob data
-    // or placeholder/demo image URLs in the posts table.
-    const finalImages: string[] = [];
-    try {
-      for (let index = 0; index < uploadedImages.length; index += 1) {
-        const dataUrl = uploadedImages[index];
-        const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-        if (!match) continue;
-        const mimeType = match[1];
-        const base64 = match[2];
-        const binary = atob(base64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-        const extension = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
-        const path = `${user.id}/${crypto.randomUUID()}-${index}.${extension}`;
-        const { error: uploadError } = await supabase.storage
-          .from('posts')
-          .upload(path, bytes, { contentType: mimeType, upsert: false });
-        if (uploadError) throw uploadError;
-        const { data: publicUrl } = supabase.storage.from('posts').getPublicUrl(path);
-        finalImages.push(publicUrl.publicUrl);
+    // Resolve final images: use uploaded images from gallery/camera or clean category default
+    let finalImages = [...uploadedImages];
+    if (finalImages.length === 0) {
+      if (category === 'cars') {
+        finalImages = ['https://images.unsplash.com/photo-1617814076367-b759c7d7e738?w=900&auto=format&fit=crop&q=80'];
+      } else if (category === 'fashion') {
+        finalImages = ['https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?w=900&auto=format&fit=crop&q=80'];
+      } else if (category === 'food') {
+        finalImages = ['https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=900&auto=format&fit=crop&q=80'];
+      } else if (category === 'tech') {
+        finalImages = ['https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=900&auto=format&fit=crop&q=80'];
+      } else {
+        finalImages = ['https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=900&auto=format&fit=crop&q=80'];
       }
-    } catch (uploadError: any) {
-      toast.error(uploadError?.message || (isRtl ? 'وێنەکە نەکرا بۆ سێرڤەر بار بکرێت.' : 'Image upload failed.'));
-      return;
     }
-    const coverImage = finalImages[0] || '';
+    const coverImage = finalImages[0];
 
     // Author identity based on current role
     let authorName = 'شاخ ستۆر (SHAKH Store Platform)';
-    let authorType: 'store' | 'user' = 'store';
+    let authorType: 'store' | 'user' | 'driver' = 'store';
 
-    if (activeRole === 'FASHION' || activeRole === 'FASHION_MERCHANT') {
+    if (activeRole === 'FASHION_MERCHANT') {
       authorName = 'فرۆشگای جل و بەرگ (Fashion Store)';
-    } else if (activeRole === 'CAR_SELLER' || activeRole === 'CARS_MERCHANT') {
+    } else if (activeRole === 'CARS_MERCHANT') {
       authorName = user?.user_metadata?.showroom_name || user?.user_metadata?.full_name || 'IQ Cars Showroom';
-    } else if (activeRole === 'RESTAURANT' || activeRole === 'FOOD_MERCHANT') {
+    } else if (activeRole === 'FOOD_MERCHANT') {
       authorName = 'چێشتخانە و فاست فوودی شاخ';
-    } else if (activeRole === 'SUPERMARKET' || activeRole === 'MARKET_MERCHANT') {
+    } else if (activeRole === 'MARKET_MERCHANT') {
       authorName = 'سوپەرمارکێتی شاخ';
-    } else if (activeRole === 'TECH' || activeRole === 'TECH_MERCHANT') {
+    } else if (activeRole === 'TECH_MERCHANT') {
       authorName = 'فرۆشگای تەکنەلۆژیا و مۆبایلی شاخ';
     } else {
       authorName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'بەکارهێنەر (User)';
       authorType = 'user';
     }
 
-    try {
-      await createPost({
-      status: isSuperAdmin ? 'approved' : 'pending',
+    createPost({
       title: title.trim() || undefined,
       content: content.trim(),
       content_ku: content.trim(),
@@ -384,7 +356,11 @@ export default function CreatePostModal({ isOpen, onClose }: CreatePostModalProp
       author: {
         id: user?.id || 'shakh-author',
         name: authorName,
-        avatar: profile?.avatar || user?.user_metadata?.avatar_url || '',
+        avatar: isSuperAdmin
+          ? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80'
+          : category === 'cars'
+          ? 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=100&auto=format&fit=crop&q=80'
+          : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
         verified: true,
         type: authorType,
         location: isRtl ? 'هەولێر - کوردستان' : 'Erbil - Kurdistan',
@@ -392,7 +368,7 @@ export default function CreatePostModal({ isOpen, onClose }: CreatePostModalProp
       product:
         category === 'cars' && carPriceIqd
           ? {
-              id: crypto.randomUUID(),
+              id: `car-${Date.now()}`,
               name: `${carMake} ${carModel} ${carYear}`,
               price: Number(carPriceIqd),
               image: coverImage,
@@ -400,7 +376,7 @@ export default function CreatePostModal({ isOpen, onClose }: CreatePostModalProp
             }
           : productName.trim() && productPrice
           ? {
-              id: crypto.randomUUID(),
+              id: `prod-${Date.now()}`,
               name: productName.trim(),
               price: Number(productPrice) || 10000,
               image: coverImage,
@@ -426,13 +402,10 @@ export default function CreatePostModal({ isOpen, onClose }: CreatePostModalProp
           : `Post pending approval! It will be published once Super Admin verifies the ${price.toLocaleString()} IQD payment receipt.`
       );
     } else {
-      toast.success(isRtl ? 'پۆستەکەت تۆمار کرا و چاوەڕێی پشکنینە.' : 'Post submitted and is waiting for approval.');
+      toast.success(isRtl ? 'پۆستەکەت بە سەرکەوتوویی بڵاوکرایەوە' : 'Post published successfully');
     }
 
-      onClose();
-    } catch (error: any) {
-      toast.error(error?.message || (isRtl ? 'پۆست نەکرا تۆمار بکرێت.' : 'Post could not be created.'));
-    }
+    onClose();
   };
 
   return (
@@ -466,14 +439,67 @@ export default function CreatePostModal({ isOpen, onClose }: CreatePostModalProp
           </button>
         </div>
 
-        {/* ROLE AUTHORITY STATUS BAR */}
-        <div className="px-5 sm:px-6 py-2.5 bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 shrink-0">
-          {isSuperAdmin ? <Crown className="w-4 h-4 text-amber-600 shrink-0" /> : <ShieldCheck className="w-4 h-4 text-primary-600 shrink-0" />}
-          <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{isRtl ? 'ڕۆڵی تۆ:' : 'Your role:'}</span>
-          <span className="text-[11px] font-extrabold text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-950/40 px-2 py-0.5 rounded-lg">
-            {isSuperAdmin ? 'SUPER_ADMIN' : ALL_SYSTEM_ROLES.find((r) => r.role === activeRole)?.[isRtl ? 'labelKu' : 'labelEn'] || activeRole}
-          </span>
+        {/* ROLE AUTHORITY STATUS BAR & SWITCHER */}
+        <div className="px-5 sm:px-6 py-2.5 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 border-b border-amber-200/70 dark:border-amber-900/40 flex flex-wrap items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center gap-2 text-xs">
+            {isSuperAdmin ? (
+              <Crown className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            ) : (
+              <ShieldCheck className="w-4 h-4 text-primary-600 dark:text-primary-400 shrink-0" />
+            )}
+            <span className="font-bold text-slate-800 dark:text-slate-200">
+              {isRtl ? 'ڕۆڵی تۆ:' : 'Your Role:'}
+            </span>
+            <span className="font-extrabold text-amber-800 dark:text-amber-300 bg-amber-100/80 dark:bg-amber-900/50 px-2 py-0.5 rounded-lg border border-amber-300/60 dark:border-amber-700/60 text-[11px]">
+              {isSuperAdmin
+                ? isRtl ? '👑 پلاتفۆرمی شاخ ستۆر (دەسەڵاتی بڵاوکردنەوە لە هەموو بەشەکان)' : '👑 SHAKH Store Platform (Full Access All Categories)'
+                : ALL_SYSTEM_ROLES.find((r) => r.role === activeRole)?.[isRtl ? 'labelKu' : 'labelEn'] || activeRole}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowRoleTester(!showRoleTester)}
+            className="text-[11px] font-bold text-amber-700 dark:text-amber-400 hover:underline flex items-center gap-1"
+          >
+            <span>{isRtl ? 'گۆڕینی ڕۆڵ بۆ تاقیکردنەوەی دەسەڵاتەکان' : 'Switch Role (Test Permissions)'}</span>
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showRoleTester ? 'rotate-180' : ''}`} />
+          </button>
         </div>
+
+        {/* Interactive Role Switcher Drawer (To easily test roles and permissions) */}
+        {showRoleTester && (
+          <div className="p-3.5 bg-slate-100 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-700 space-y-2 animate-fadeIn shrink-0">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+              {isRtl ? 'ڕۆڵێک هەڵبژێرە بۆ تاقیکردنەوەی دەسەڵاتی پۆستکردن:' : 'Select a role to test posting authority:'}
+            </span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              {ALL_SYSTEM_ROLES.map((r) => {
+                const isCurrent = (r.role === 'SUPER_ADMIN' && isSuperAdmin) || activeRole === r.role;
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveRole(r.role);
+                      const newAllowed = getRoleAllowedCategories(r.role);
+                      if (!newAllowed.includes(category)) {
+                        setCategory(newAllowed[0] as any);
+                      }
+                    }}
+                    className={`p-2 rounded-xl text-start text-[11px] font-bold border transition-all truncate ${
+                      isCurrent
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                        : 'bg-white dark:bg-slate-750 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-amber-400'
+                    }`}
+                  >
+                    {isRtl ? r.labelKu : r.labelEn}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">

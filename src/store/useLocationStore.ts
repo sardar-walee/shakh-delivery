@@ -42,10 +42,24 @@ const DEFAULT_LOCATION: LocationSelection = {
 };
 
 export const useLocationStore = create<LocationStoreState>((set, get) => {
+  // Load initial from localStorage if available
+  let initialLocation = DEFAULT_LOCATION;
+  const saved = localStorage.getItem('shakh_selected_location');
+  if (saved) {
+    try {
+      initialLocation = JSON.parse(saved);
+    } catch {
+      initialLocation = DEFAULT_LOCATION;
+    }
+  }
+
+  // Check if location was explicitly selected before
+  const hasEverChosen = localStorage.getItem('shakh_location_chosen') === 'true';
+
   return {
-    currentLocation: DEFAULT_LOCATION,
+    currentLocation: initialLocation,
     isModalOpen: false,
-    hasPromptedOnEntry: false,
+    hasPromptedOnEntry: hasEverChosen,
     gpsLoading: false,
     gpsError: null,
 
@@ -53,6 +67,8 @@ export const useLocationStore = create<LocationStoreState>((set, get) => {
     closeModal: () => set({ isModalOpen: false }),
 
     setLocation: (loc: LocationSelection) => {
+      localStorage.setItem('shakh_selected_location', JSON.stringify(loc));
+      localStorage.setItem('shakh_location_chosen', 'true');
       set({ currentLocation: loc, isModalOpen: false, hasPromptedOnEntry: true });
     },
 

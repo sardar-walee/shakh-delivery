@@ -35,7 +35,7 @@ export default function CaptainCashSettlementModal({ isOpen, onClose, captain, o
   const summary = getCaptainFinancialSummary(captain);
 
   const [returnAmount, setReturnAmount] = useState<number>(summary.remainingCashInHand);
-  const [paymentMethod, setPaymentMethod] = useState<'CASH_OFFICE'>('CASH_OFFICE');
+  const [paymentMethod, setPaymentMethod] = useState<'CASH_OFFICE' | 'FASTPAY' | 'FIB' | 'ZAIN_CASH' | 'BANK_TRANSFER'>('CASH_OFFICE');
   const [receivedBy, setReceivedBy] = useState<string>('بەڕێوەبەری دارایی (سەردار خانۆ)');
   const [notes, setNotes] = useState<string>('');
   const [createdSettlement, setCreatedSettlement] = useState<SettlementRecord | null>(null);
@@ -59,7 +59,7 @@ export default function CaptainCashSettlementModal({ isOpen, onClose, captain, o
 
   const newProjectedBalance = Math.max(0, summary.remainingCashInHand - returnAmount);
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (returnAmount <= 0) return;
 
@@ -70,7 +70,7 @@ export default function CaptainCashSettlementModal({ isOpen, onClose, captain, o
       summary.totalPlatformFee
     );
 
-    const res = await recordSettlement({
+    const res = recordSettlement({
       captainId: captain.id,
       amountReturned: returnAmount,
       paymentMethod,
@@ -373,14 +373,63 @@ export default function CaptainCashSettlementModal({ isOpen, onClose, captain, o
                 </div>
               </div>
 
-              {/* Payment Method — SHAKH is cash-only for now */}
+              {/* Payment Method Selector */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                   شێوازی وەرگرتنەوە لە کاپتن:
                 </label>
-                <div className="p-3 rounded-xl border border-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 flex items-center gap-2 text-xs font-bold">
-                  <DollarSign className="w-4 h-4" />
-                  <span>کاش لە ئۆفیس — CASH_OFFICE</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('CASH_OFFICE')}
+                    className={`p-2.5 rounded-xl border text-start flex items-center gap-2 text-xs font-bold transition-colors ${
+                      paymentMethod === 'CASH_OFFICE'
+                        ? 'border-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 ring-1 ring-emerald-500'
+                        : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    <DollarSign className="w-4 h-4 text-emerald-600" />
+                    <span>کاش لە ئۆفیس</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('FASTPAY')}
+                    className={`p-2.5 rounded-xl border text-start flex items-center gap-2 text-xs font-bold transition-colors ${
+                      paymentMethod === 'FASTPAY'
+                        ? 'border-primary-500 bg-primary-50/60 dark:bg-primary-950/40 text-primary-800 dark:text-primary-200 ring-1 ring-primary-500'
+                        : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    <Smartphone className="w-4 h-4 text-red-500" />
+                    <span>فاستپەی (FastPay)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('FIB')}
+                    className={`p-2.5 rounded-xl border text-start flex items-center gap-2 text-xs font-bold transition-colors ${
+                      paymentMethod === 'FIB'
+                        ? 'border-blue-500 bg-blue-50/60 dark:bg-blue-950/40 text-blue-800 dark:text-blue-200 ring-1 ring-blue-500'
+                        : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    <Building2 className="w-4 h-4 text-blue-600" />
+                    <span>FIB بانکی یەکەم</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('ZAIN_CASH')}
+                    className={`p-2.5 rounded-xl border text-start flex items-center gap-2 text-xs font-bold transition-colors ${
+                      paymentMethod === 'ZAIN_CASH'
+                        ? 'border-purple-500 bg-purple-50/60 dark:bg-purple-950/40 text-purple-800 dark:text-purple-200 ring-1 ring-purple-500'
+                        : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    <CreditCard className="w-4 h-4 text-purple-600" />
+                    <span>زین کاش (ZainCash)</span>
+                  </button>
                 </div>
               </div>
 

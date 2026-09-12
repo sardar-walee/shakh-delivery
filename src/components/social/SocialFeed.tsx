@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Sparkles,
@@ -11,11 +11,8 @@ import {
   Heart,
   Plus,
   Compass,
-  Car,
-  Smartphone,
 } from 'lucide-react';
 import { useSocialStore } from '../../store/useSocialStore';
-import { useAuthStore } from '../../store/useAuthStore';
 import StoriesBar from './StoriesBar';
 import PostCard from './PostCard';
 import PostDetailModal from './PostDetailModal';
@@ -31,7 +28,6 @@ interface SocialFeedProps {
 
 export default function SocialFeed({ showStories = true, limit, standalone = false }: SocialFeedProps) {
   const { i18n } = useTranslation();
-  const { activeRole } = useAuthStore();
   const currentLang = (i18n.language || 'ku') as 'ku' | 'ar' | 'en';
   const isRtl = currentLang !== 'en';
 
@@ -47,16 +43,9 @@ export default function SocialFeed({ showStories = true, limit, standalone = fal
     closeShareModal,
     activeStory,
     closeStory,
-    loadFeed,
-    subscribeToRealtime,
   } = useSocialStore();
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-
-  useEffect(() => {
-    void loadFeed();
-    return subscribeToRealtime();
-  }, [loadFeed, subscribeToRealtime]);
 
   const categories = [
     { id: 'all', name: isRtl ? 'هەموو پۆستەکان' : 'All Posts', icon: Compass },
@@ -65,9 +54,6 @@ export default function SocialFeed({ showStories = true, limit, standalone = fal
     { id: 'market', name: isRtl ? 'مارکێت و خواردەمەنی' : 'Supermarket', icon: Store },
     { id: 'fashion', name: isRtl ? 'مۆدە و جلوبەرگ' : 'Fashion', icon: Shirt },
     { id: 'beauty', name: isRtl ? 'عەتر و جوانی' : 'Beauty & Perfume', icon: Heart },
-    { id: 'cars', name: isRtl ? 'ئۆتۆمبێل' : 'Cars', icon: Car },
-    { id: 'tech', name: isRtl ? 'تەکنەلۆجیا' : 'Technology', icon: Smartphone },
-    { id: 'umrah', name: isRtl ? 'عومرە' : 'Umrah', icon: Sparkles },
   ];
 
   const filteredPosts = useMemo(() => {
@@ -120,8 +106,7 @@ export default function SocialFeed({ showStories = true, limit, standalone = fal
           </div>
         </div>
 
-        {/* Create Post Button — only roles with an approved publishing scope */}
-        {['SUPER_ADMIN','ADMIN','RESTAURANT','SUPERMARKET','FASHION','UMRAH','CAR_SELLER','BEAUTY','TECH','FOOD_MERCHANT','MARKET_MERCHANT','FASHION_MERCHANT','CARS_MERCHANT','TECH_MERCHANT'].includes(activeRole || '') && (
+        {/* Create Post Button */}
         <button
           onClick={() => setIsCreateModalOpen(true)}
           className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold shadow-xs transition-all self-start sm:self-auto"
@@ -129,7 +114,6 @@ export default function SocialFeed({ showStories = true, limit, standalone = fal
           <Plus className="w-4 h-4" />
           <span>{isRtl ? 'پۆستی نوێ دابنێ' : 'New Post'}</span>
         </button>
-        )}
       </div>
 
       {/* 3. CATEGORY PILLS & SEARCH */}

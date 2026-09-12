@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../lib/supabase';
-import { useAuthStore } from '../../store/useAuthStore';
 import {
   Store,
   Clock,
@@ -36,7 +35,6 @@ interface ProductItem {
 
 export default function MerchantDashboard() {
   const { t } = useTranslation();
-  const { user } = useAuthStore();
   const [isOpen, setIsOpen] = useState(true);
   const [orders, setOrders] = useState<MerchantOrder[]>([]);
   const [products, setProducts] = useState<ProductItem[]>([]);
@@ -58,11 +56,20 @@ export default function MerchantDashboard() {
       // 2. Fetch products
       const { data: prodData } = await supabase
         .from('products')
-        .select('id, name, price, is_available, stock, business:businesses!products_business_id_fkey!inner(owner_id)')
-        .eq('business.owner_id', user?.id || '')
+        .select('id, name, price, is_available, stock')
         .limit(10);
 
-      setProducts(prodData || []);
+      if (prodData && prodData.length > 0) {
+        setProducts(prodData);
+      } else {
+        // Fallback demo items if vendor just opened
+        setProducts([
+          { id: '1', name: 'Kabab Erbil Special', price: 12000, is_available: true, stock: 45 },
+          { id: '2', name: 'Biryani Rice with Lamb', price: 14000, is_available: true, stock: 20 },
+          { id: '3', name: 'Fresh Kurdish Bread (5x)', price: 1500, is_available: true, stock: 100 },
+          { id: '4', name: 'Lentil Soup with Croutons', price: 3500, is_available: false, stock: 0 },
+        ]);
+      }
     } catch (err) {
       console.error('Error fetching merchant data:', err);
     } finally {

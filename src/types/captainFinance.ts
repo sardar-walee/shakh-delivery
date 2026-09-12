@@ -39,7 +39,7 @@ export interface SettlementRecord {
     orderAmountSettled?: number; // پارەی ئۆردەری فرۆشیاران
     deliverySettled?: number;
   };
-  paymentMethod: 'CASH_OFFICE';
+  paymentMethod: 'CASH_OFFICE' | 'FASTPAY' | 'FIB' | 'ZAIN_CASH' | 'BANK_TRANSFER';
   paymentMethodLabelKu: string;
   receivedBy: string; // Admin/Accountant name
   referenceCode: string;

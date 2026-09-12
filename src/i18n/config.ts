@@ -28,7 +28,10 @@ i18n
     interpolation: {
       escapeValue: false,
     },
-    detection: { order: ['navigator'] }
+    detection: {
+      order: ['localStorage', 'navigator'],
+      caches: ['localStorage'],
+    }
   });
 
 export default i18n;

@@ -1,8 +1,6 @@
 {
   "name": "SHAKH Store",
   "description": "SHAKH Store (شاخ ستۆر) - The comprehensive Kurdish marketplace, stores, food delivery, and social commerce platform in Kurdistan and Iraq.",
-  "requestFramePermissions": [
-    "geolocation",
-    "camera"
-  ]
+  "requestFramePermissions": ["geolocation", "camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

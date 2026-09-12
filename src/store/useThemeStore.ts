@@ -15,8 +15,13 @@ interface ThemeState {
 const getInitialTheme = (): ThemeMode => {
   if (typeof window === 'undefined') return 'light';
 
-  // Prefer the user's system preference before authentication; authenticated preferences are loaded from Supabase.
-  // Check document element class
+  // 1. Check local storage
+  const storedTheme = localStorage.getItem('theme') as ThemeMode | null;
+  if (storedTheme === 'dark' || storedTheme === 'light') {
+    return storedTheme;
+  }
+
+  // 2. Check document element class
   if (document.documentElement.classList.contains('dark')) {
     return 'dark';
   }
@@ -51,6 +56,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   setTheme: async (newTheme: ThemeMode, explicitUserId?: string) => {
     // 1. Update DOM and local state immediately for instant feedback
     applyThemeToDOM(newTheme);
+    localStorage.setItem('theme', newTheme);
     set({ theme: newTheme, isDark: newTheme === 'dark' });
 
     // 2. Persist to Supabase Profile if user is logged in
@@ -102,6 +108,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
       const targetTheme = normalized as ThemeMode;
       if (get().theme !== targetTheme) {
         applyThemeToDOM(targetTheme);
+        localStorage.setItem('theme', targetTheme);
         set({ theme: targetTheme, isDark: targetTheme === 'dark' });
       }
     }

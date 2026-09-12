@@ -46,9 +46,21 @@ export function calculateDistance(
 }
 
 export function useGeolocation(): GeolocationState {
-  const [coordinates, setCoordinates] = useState<Coordinates | null>(null);
+  const [coordinates, setCoordinates] = useState<Coordinates | null>(() => {
+    const cached = localStorage.getItem('shakh_user_coords');
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
 
-  const [city, setCity] = useState<string | null>(null);
+  const [city, setCity] = useState<string | null>(() => {
+    return localStorage.getItem('shakh_user_city') || null;
+  });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +93,7 @@ export function useGeolocation(): GeolocationState {
 
         if (detectedCity) {
           setCity(detectedCity);
+          localStorage.setItem('shakh_user_city', detectedCity);
           return;
         }
       }
@@ -101,6 +114,7 @@ export function useGeolocation(): GeolocationState {
     }
 
     setCity(closestCity);
+    localStorage.setItem('shakh_user_city', closestCity);
   }, []);
 
   const requestLocation = useCallback(() => {
@@ -119,6 +133,7 @@ export function useGeolocation(): GeolocationState {
           longitude: position.coords.longitude,
         };
         setCoordinates(coords);
+        localStorage.setItem('shakh_user_coords', JSON.stringify(coords));
         setLoading(false);
         resolveCityFromCoordinates(coords.latitude, coords.longitude);
       },

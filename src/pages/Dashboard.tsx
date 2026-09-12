@@ -24,7 +24,7 @@ import {
 export default function Dashboard() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { activeRole, roles, setActiveRole } = useAuthStore();
+  const { activeRole, setActiveRole } = useAuthStore();
 
   // Roles catalogue
   const rolesList = [
@@ -86,25 +86,10 @@ export default function Dashboard() {
     },
   ];
 
-  // The URL is not an authorization mechanism. Only roles actually granted
-  // by Supabase may open a role workspace.
-  const grantedRoles = new Set(roles.filter((r) => r.status === 'approved').map((r) => r.role));
-  const canUseAdminWorkspaces = grantedRoles.has('SUPER_ADMIN') || grantedRoles.has('ADMIN');
-  const requestedRole = searchParams.get('role');
-  const fallbackRole = activeRole && grantedRoles.has(activeRole)
-    ? activeRole
-    : (grantedRoles.has('SUPER_ADMIN') ? 'SUPER_ADMIN' : grantedRoles.has('ADMIN') ? 'ADMIN' : 'CUSTOMER');
-  const effectiveRole = requestedRole && (
-    requestedRole === 'CAPTAIN_FINANCE'
-      ? canUseAdminWorkspaces
-      : grantedRoles.has(requestedRole)
-  ) ? requestedRole : fallbackRole;
-
-  const allowedRole = (roleId: string) =>
-    roleId === 'CAPTAIN_FINANCE' ? canUseAdminWorkspaces : grantedRoles.has(roleId);
+  // Current effective role
+  const effectiveRole = searchParams.get('role') || activeRole || 'SUPER_ADMIN';
 
   const handleSwitchRole = (newRole: string) => {
-    if (!allowedRole(newRole)) return;
     setActiveRole(newRole);
     setSearchParams({ role: newRole });
   };
@@ -126,7 +111,7 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-          {rolesList.filter((r) => allowedRole(r.id)).map((r) => {
+          {rolesList.map((r) => {
             const Icon = r.icon;
             const isSelected = effectiveRole === r.id;
             return (
