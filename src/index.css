@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-primary-50: #fff1f2;
+  --color-primary-100: #ffe4e6;
+  --color-primary-500: #f43f5e;
+  --color-primary-600: #e11d48;
+  --color-primary-700: #be123c;
+  
+  --color-surface: #ffffff;
+  --color-surface-dark: #121212;
+  --color-surface-muted: #f8fafc;
+  --color-surface-muted-dark: #1e1e1e;
+  
+  --font-sans: 'Inter', 'Noto Kufi Arabic', system-ui, sans-serif;
+  --font-display: 'Outfit', 'Noto Kufi Arabic', system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-surface text-slate-900 dark:bg-surface-dark dark:text-slate-50 antialiased selection:bg-primary-500 selection:text-white;
+    font-family: var(--font-sans);
+  }
+
+  /* Support for RTL layouts */
+  [dir="rtl"] {
+    text-align: right;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-6 rounded-xl transition-all duration-200 active:scale-95 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  .btn-secondary {
+    @apply bg-slate-100 hover:bg-slate-200 text-slate-900 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-white font-medium py-3 px-6 rounded-xl transition-all duration-200 active:scale-95;
+  }
+  
+  .card {
+    @apply bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-6;
+  }
+  
+  .input-field {
+    @apply w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all;
+  }
+}
